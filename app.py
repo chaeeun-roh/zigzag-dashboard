@@ -26,8 +26,10 @@ def resolve_image(model: str, mapping: dict):
 
 @st.cache_data(show_spinner=False)
 def to_table_src(src):
-    """표(ImageColumn)용: URL은 그대로, 로컬 파일은 data URI로 변환."""
-    if not src or src.startswith("http"):
+    """표(ImageColumn)용: URL은 그대로, 로컬 파일은 data URI로 변환. 이미지가 없으면 None."""
+    if not isinstance(src, str) or not src:
+        return None
+    if src.startswith("http"):
         return src
     p = Path(src)
     mime = "image/png" if p.suffix == ".png" else "image/webp" if p.suffix == ".webp" else "image/jpeg"
@@ -153,8 +155,9 @@ def render_ranking(sub: pd.DataFrame, sort_key: str, top_n: int, caption: str):
     cols = st.columns(5)
     for i, (col, (_, r)) in enumerate(zip(cols, p.head(5).iterrows()), start=1):
         with col:
-            if r["_src"]:
-                st.image(r["_src"], use_container_width=True)
+            src = r["_src"]
+            if isinstance(src, str) and src:
+                st.image(src, use_container_width=True)
             else:
                 st.markdown("🖼️ *이미지 없음*")
             st.markdown(f"**{i}위 · {r['모델명']}**")
