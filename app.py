@@ -9,6 +9,7 @@ import utils
 st.set_page_config(page_title="지그재그 브랜드 판매 대시보드", page_icon="📊", layout="wide")
 
 IMG_DIR = Path(__file__).parent / "images"  # images/5286137.jpg 처럼 모델명으로 저장
+DATA_DIR = Path(__file__).parent / "data"   # 여기에 판매 엑셀을 넣어두면 업로드 없이 자동으로 불러옴
 
 
 # ---------------- 이미지 ----------------
@@ -46,14 +47,22 @@ map_file = st.sidebar.file_uploader(
     help="저장소에 image_map.xlsx를 같이 올려두면 자동으로 불러옵니다.",
 )
 
-if not files:
+auto_files = []
+if DATA_DIR.exists():
+    auto_files = sorted(p for p in DATA_DIR.glob("*.xlsx") if not p.name.startswith("~$"))
+sources = list(files) if files else auto_files
+
+if not sources:
     st.title("📊 지그재그 브랜드 판매 대시보드")
     st.info("왼쪽에서 ERP 판매 엑셀(sales_revenue...xlsx)을 업로드하면 대시보드가 만들어집니다. "
             "작년 동기간 비교를 보려면 작년 파일도 함께 올려주세요.")
     st.stop()
+if not files:
+    st.sidebar.success(f"저장소 data 폴더의 파일 {len(auto_files)}개를 자동으로 불러왔어요. "
+                       "다른 파일을 올리면 그 파일로 대체됩니다.")
 
 frames = []
-for f in files:
+for f in sources:
     try:
         frames.append(utils.load_sales(f))
     except Exception as e:
@@ -128,14 +137,14 @@ pct = st.column_config.NumberColumn(format="%.1f%%")
 left, right = st.columns(2)
 with left:
     st.subheader("🏷️ 브랜드별 요약")
-    b = utils.by_brand(df)[["브랜드", "매출", "이익", "수익률", "수량", "평균판매가", "매출비중"]]
+    b = utils.by_brand(df)[["브랜드", "매출", "이익", "수익률", "주문건수", "수량", "평균판매가", "매출비중"]]
     st.dataframe(b, hide_index=True, use_container_width=True,
-                 column_config={"매출": won, "이익": won, "평균판매가": won, "수량": won, "수익률": pct, "매출비중": pct})
+                 column_config={"매출": won, "이익": won, "평균판매가": won, "주문건수": won, "수량": won, "수익률": pct, "매출비중": pct})
 with right:
     st.subheader("📦 카테고리별 요약")
-    c = utils.by_category(df)[["브랜드", "카테고리", "매출", "이익", "수익률", "수량"]]
+    c = utils.by_category(df)[["브랜드", "카테고리", "매출", "이익", "수익률", "주문건수", "수량"]]
     st.dataframe(c, hide_index=True, use_container_width=True,
-                 column_config={"매출": won, "이익": won, "수량": won, "수익률": pct})
+                 column_config={"매출": won, "이익": won, "주문건수": won, "수량": won, "수익률": pct})
 
 
 # ---------------- 베스트셀러 (기간별) ----------------
@@ -163,17 +172,18 @@ def render_ranking(sub: pd.DataFrame, sort_key: str, top_n: int, caption: str):
             st.markdown(f"**{i}위 · {r['모델명']}**")
             st.caption(f"{r['브랜드']} · {r['카테고리']}")
             st.write(f"매출 {r['매출']:,.0f}원")
-            st.write(f"수량 {r['수량']:,.0f}개 · 수익률 {r['수익률']:.1f}%")
+            st.write(f"주문 {r['주문건수']:,.0f}건 · 수량 {r['수량']:,.0f}개")
+            st.write(f"수익률 {r['수익률']:.1f}%")
 
     # 전체 TOP N 표 (썸네일 포함)
     table = p.assign(이미지=p["_src"].map(to_table_src))
     cols_show = ["이미지", "브랜드", "모델명"] + (["상품명"] if "상품명" in table.columns else []) + \
-                ["카테고리", "수량", "매출", "이익", "수익률", "평균판매가", "평균수수료율"]
+                ["카테고리", "주문건수", "수량", "매출", "이익", "수익률", "평균판매가", "평균수수료율"]
     st.dataframe(
         table[cols_show], hide_index=True, use_container_width=True, row_height=64,
         column_config={
             "이미지": st.column_config.ImageColumn("이미지", width="small"),
-            "수량": won, "매출": won, "이익": won, "평균판매가": won,
+            "주문건수": won, "수량": won, "매출": won, "이익": won, "평균판매가": won,
             "수익률": st.column_config.ProgressColumn("수익률", format="%.1f%%", min_value=0, max_value=40),
             "평균수수료율": pct,
         },
